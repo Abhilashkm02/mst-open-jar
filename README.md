@@ -9,7 +9,6 @@ Small and Medium Enterprises (SMEs) are the lifeblood of industrial innovation a
 
 **MST Open Jar** democratizes access to SME IPOs through decentralized, non-custodial smart contracts on the MST blockchain. Retail investors pool micro-investments of MST tokens (starting from as little as **1 fraction / 1,500 – 2,500 MST**) into an "Open Jar" syndicate to collectively acquire full SME IPO lots with zero allotment bias and automated on-chain returns distribution.
 
-> 📊 **Pitch Presentation Deck**: View the interactive 7-slide buildathon pitch deck in [PRESENTATION.md](./PRESENTATION.md).
 
 ---
 
