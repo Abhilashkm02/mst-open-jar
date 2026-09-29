@@ -20,7 +20,7 @@ export const INITIAL_JARS: IpoJar[] = [
     leadManager: "Axis Capital Markets",
     retailReservation: "35% Retail Quota",
     lotSize: 1000,
-    contractAddress: "0xc743132Ae8e27B8F4dD2E0BF27925eC749f10062",
+    contractAddress: "0x0f8a635256187a60C711EEd4404adc5432d409D9",
     isFeatured: true,
   },
   {
