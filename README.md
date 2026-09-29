@@ -77,7 +77,7 @@ Small and Medium Enterprises (SMEs) are the lifeblood of industrial innovation a
 ```bash
 # 1. Clone the repository
 git clone <repo-url>
-cd Buildathon
+cd mst-open-jar
 
 # 2. Install dependencies
 npm install
