@@ -5,9 +5,13 @@ import { useJars } from "@/context/JarsContext";
 import { formatMST } from "@/lib/formatUtils";
 import { PortfolioRow } from "./PortfolioRow";
 import { SettlementCard } from "./SettlementCard";
-import { TrendingUp, Inbox } from "lucide-react";
+import { TrendingUp, Inbox, Sparkles, ArrowRight, ShieldCheck } from "lucide-react";
 
-export const MyJarsView: React.FC = () => {
+interface MyJarsViewProps {
+  onNavigateToAllotment?: () => void;
+}
+
+export const MyJarsView: React.FC<MyJarsViewProps> = ({ onNavigateToAllotment }) => {
   const { jars, userInvestments, claimRefund, withdrawReturns, openInvestDrawer } = useJars();
 
   const [activeTab, setActiveTab] = React.useState<"ACTIVE" | "SETTLED">("ACTIVE");
@@ -107,6 +111,36 @@ export const MyJarsView: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Allotment Status Quick Nav Banner */}
+      {onNavigateToAllotment && (
+        <div className="bg-gradient-to-r from-ink-surface via-ink-card to-ink-surface border border-cobalt/30 rounded-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-btn bg-cobalt/10 border border-cobalt/30 flex items-center justify-center shrink-0 text-cobalt">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-paper">Decentralized Allotment Draws</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cobalt/20 text-cobalt border border-cobalt/30">
+                  Chainlink VRF v2
+                </span>
+              </div>
+              <p className="text-xs text-paper-muted mt-0.5">
+                Inspect 256-bit cryptographic randomness proofs, see win/loss draws, and trigger automated instant refunds.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onNavigateToAllotment}
+            className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-btn bg-cobalt hover:bg-cobalt-hover text-paper text-xs font-mono font-medium transition-colors shrink-0 shadow-sm"
+          >
+            <span>View Allotment Status</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Tabs: Active / Settled */}
       <div className="border-b border-hairline flex items-center gap-6">

@@ -40,7 +40,7 @@ export function truncateAddress(address: string): string {
 export function generateMockTxHash(): string {
   const chars = '0123456789abcdef';
   let hash = '0x';
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 64; i++) {
     hash += chars[Math.floor(Math.random() * chars.length)];
   }
   return hash;

@@ -4,12 +4,13 @@ import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { ExploreView } from "@/components/ExploreView";
 import { MyJarsView } from "@/components/MyJarsView";
+import { AllotmentStatusView } from "@/components/AllotmentStatusView";
 import { InvestDrawer } from "@/components/InvestDrawer";
 import { IssuerConsoleModal } from "@/components/IssuerConsoleModal";
 import { useJars } from "@/context/JarsContext";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"explore" | "my-jars">("explore");
+  const [activeTab, setActiveTab] = useState<"explore" | "my-jars" | "allotment">("explore");
   const [isIssuerConsoleOpen, setIsIssuerConsoleOpen] = useState(false);
   const { selectedJar, closeInvestDrawer } = useJars();
 
@@ -25,7 +26,10 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="flex-1 w-full">
         {activeTab === "explore" && <ExploreView />}
-        {activeTab === "my-jars" && <MyJarsView />}
+        {activeTab === "my-jars" && <MyJarsView onNavigateToAllotment={() => setActiveTab("allotment")} />}
+        {activeTab === "allotment" && (
+          <AllotmentStatusView onOpenIssuerConsole={() => setIsIssuerConsoleOpen(true)} />
+        )}
       </main>
 
       {/* Right-Side Desktop Drawer / Full-Screen Mobile Sheet */}

@@ -1,4 +1,5 @@
 import { IpoJar, UserInvestment } from "@/types";
+import { CONTRACT_ADDRESS } from "@/contracts/config";
 
 export const INITIAL_JARS: IpoJar[] = [
   {
@@ -147,8 +148,18 @@ export const INITIAL_JARS: IpoJar[] = [
     leadManager: "Edelweiss Financial",
     retailReservation: "35% Retail Quota",
     lotSize: 1000,
-    contractAddress: "0x6b175474e89094c44da98b954eedeac495271d0f",
-    failureReason: "Exchange allotment draw missed due to 48x institutional oversubscription. Funds are returned in full by the smart contract.",
+    contractAddress: CONTRACT_ADDRESS,
+    failureReason: "Decentralized allotment draw missed due to 48x institutional oversubscription. Verified by Chainlink VRF.",
+    vrfAllotment: {
+      requestId: "VRF-8829141029",
+      randomSeed: "0x7a29e41bb92f440a92e1041efbc294a02e8471029481a942bc029e41982ab194",
+      isFulfilled: true,
+      timestamp: "27 Sep 2026, 14:30 UTC",
+      isAllotted: false,
+      drawSeedFormatted: "0x7a29...b194",
+      proofVerified: true,
+      coordinatorAddress: "0x271682DEB8C4E0901D1a1550aD2e64D568E69909",
+    },
   },
   {
     id: "JAR-006",
@@ -169,8 +180,18 @@ export const INITIAL_JARS: IpoJar[] = [
     leadManager: "Kotak Investment Banking",
     retailReservation: "35% Retail Quota",
     lotSize: 900,
-    contractAddress: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+    contractAddress: CONTRACT_ADDRESS,
     finalReturnPercent: 18.4,
+    vrfAllotment: {
+      requestId: "VRF-6640192841",
+      randomSeed: "0x3f18e9a224bc109f8241ad77309bb24e1094038102847a982cb41029e847120a",
+      isFulfilled: true,
+      timestamp: "24 Sep 2026, 11:15 UTC",
+      isAllotted: true,
+      drawSeedFormatted: "0x3f18...120a",
+      proofVerified: true,
+      coordinatorAddress: "0x271682DEB8C4E0901D1a1550aD2e64D568E69909",
+    },
   }
 ];
 
@@ -183,8 +204,10 @@ export const INITIAL_USER_INVESTMENTS: UserInvestment[] = [
     claimableMst: 10,
     realizedProfitMst: 0,
     isClaimed: false,
-    contractAddress: "0x6b175474e89094c44da98b954eedeac495271d0f",
+    contractAddress: CONTRACT_ADDRESS,
     settledDate: "27 Sep 2026",
+    isVrfVerified: true,
+    vrfSeed: "0x7a29...b194",
   },
   {
     jarId: "JAR-006", // UrbanLoom Retail (+18.4% return)
@@ -194,8 +217,10 @@ export const INITIAL_USER_INVESTMENTS: UserInvestment[] = [
     claimableMst: 23.68,
     realizedProfitMst: 3.68,
     isClaimed: false,
-    contractAddress: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+    contractAddress: CONTRACT_ADDRESS,
     settledDate: "24 Sep 2026",
+    isVrfVerified: true,
+    vrfSeed: "0x3f18...120a",
   }
 ];
 

@@ -2,6 +2,17 @@ export type Sector = 'Tech' | 'Manufacturing' | 'Health' | 'Agri' | 'Retail';
 
 export type JarStatus = 'OPEN' | 'LOCKED' | 'FAILED' | 'ALLOTTED';
 
+export interface VrfAllotmentData {
+  requestId: string;
+  randomSeed: string;
+  isFulfilled: boolean;
+  timestamp: string;
+  isAllotted: boolean;
+  drawSeedFormatted: string; // e.g. "0x892f...41e8"
+  proofVerified: boolean;
+  coordinatorAddress: string;
+}
+
 export interface IpoJar {
   id: string; // e.g. 'JAR-014'
   name: string; // e.g. 'TechNova AI'
@@ -25,6 +36,7 @@ export interface IpoJar {
   isFeatured?: boolean;
   finalReturnPercent?: number; // e.g. 18.4 for UrbanLoom
   failureReason?: string; // e.g. 'Exchange allotment draw missed due to 48x oversubscription'
+  vrfAllotment?: VrfAllotmentData;
 }
 
 export interface UserInvestment {
@@ -38,6 +50,8 @@ export interface UserInvestment {
   claimedTxHash?: string;
   contractAddress: string;
   settledDate?: string;
+  isVrfVerified?: boolean;
+  vrfSeed?: string;
 }
 
 export interface ToastItem {

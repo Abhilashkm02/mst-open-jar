@@ -74,8 +74,9 @@ export const JarGauge: React.FC<JarGaugeProps> = ({
   const colors = getStatusColor();
   const isStatic = status === "LOCKED"; // locked is static, no wave
 
-  // Generate unique IDs for SVG clip paths
-  const clipId = React.useId();
+  // Generate unique sanitized IDs for SVG clip paths (remove colons for valid SVG url references)
+  const rawClipId = React.useId();
+  const clipId = rawClipId.replace(/[^a-zA-Z0-9-_]/g, "");
 
   // If compact horizontal version
   if (variant === "compact") {

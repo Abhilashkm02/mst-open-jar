@@ -10,7 +10,7 @@ import { useWallet } from "@/context/WalletContext";
 import { useJars } from "@/context/JarsContext";
 import { useToast } from "@/context/ToastContext";
 import { formatMST, formatIndianNumber, truncateAddress } from "@/lib/formatUtils";
-import { X, Lock, Check, Loader2, Copy, ShieldCheck, ArrowRight } from "lucide-react";
+import { X, Lock, Check, Loader2, Copy, ShieldCheck, ArrowRight, Sparkles } from "lucide-react";
 
 interface InvestDrawerProps {
   jar: IpoJar | null;
@@ -107,6 +107,11 @@ export const InvestDrawer: React.FC<InvestDrawerProps> = ({ jar, onClose }) => {
       setTxStep("BROADCASTING");
 
       const result = await investPromise;
+
+      if (!result || !result.success) {
+        setTxStep("IDLE");
+        return;
+      }
 
       setTxStep("CONFIRMING");
       await new Promise(r => setTimeout(r, 350));
@@ -252,6 +257,15 @@ export const InvestDrawer: React.FC<InvestDrawerProps> = ({ jar, onClose }) => {
                     </div>
 
                     <div className="ledger-dotted-leader py-0.5">
+                      <span className="text-paper-muted">Allotment Method</span>
+                      <span className="leader-fill" />
+                      <span className="font-mono text-cobalt font-medium flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-cobalt" />
+                        <span>Chainlink VRF (Unbiased)</span>
+                      </span>
+                    </div>
+
+                    <div className="ledger-dotted-leader py-0.5">
                       <span className="text-paper-muted">Contract Escrow</span>
                       <span className="leader-fill" />
                       <span className="font-mono text-paper font-medium">{truncateAddress(jar.contractAddress)}</span>
@@ -259,9 +273,15 @@ export const InvestDrawer: React.FC<InvestDrawerProps> = ({ jar, onClose }) => {
                   </div>
                 </div>
 
-                <div className="text-[11px] text-paper-dim flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-accentEmerald" />
-                  <span>Verified by MST Blockchain Smart Contract</span>
+                <div className="text-[11px] text-paper-dim flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-accentEmerald" />
+                    <span>Non-Custodial Escrow Contract</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-cobalt">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Chainlink VRF v2 Verified</span>
+                  </div>
                 </div>
               </div>
 

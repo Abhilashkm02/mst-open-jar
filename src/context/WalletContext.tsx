@@ -74,7 +74,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Fetch balance for a given address with multi-layer fallback
   const fetchOnChainBalance = useCallback(
-    async (account: string, browserProvider: ethers.BrowserProvider, injected?: any): Promise<number> => {
+    async (account: string, browserProvider: ethers.BrowserProvider, injected?: any, fallbackBal?: number): Promise<number> => {
       // Method A: Direct extension RPC call (most reliable in extensions like BridgeKey)
       if (injected && typeof injected.request === "function") {
         try {
@@ -98,8 +98,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const ethVal = parseFloat(ethers.formatEther(balWei));
         return Number(ethVal.toFixed(4));
       } catch (err) {
-        console.warn("Could not query balance via BrowserProvider, fallback to cached testnet balance:", err);
-        return 41.99; // User's known testnet balance
+        console.warn("Could not query balance via BrowserProvider, fallback:", err);
+        return fallbackBal !== undefined ? fallbackBal : 41.99;
       }
     },
     []
@@ -107,12 +107,19 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Refresh balance on demand
   const refreshBalance = useCallback(async () => {
-    if (wallet.isRealWeb3 && wallet.address && providerRef.current) {
+    if (wallet.isRealWeb3 && wallet.address) {
       const injected = getInjectedProvider();
-      const bal = await fetchOnChainBalance(wallet.address, providerRef.current, injected);
-      setWallet(prev => ({ ...prev, balance: bal }));
+      if (!providerRef.current && injected) {
+        try {
+          providerRef.current = new ethers.BrowserProvider(injected, "any");
+        } catch {}
+      }
+      if (providerRef.current) {
+        const bal = await fetchOnChainBalance(wallet.address, providerRef.current, injected, wallet.balance);
+        setWallet(prev => ({ ...prev, balance: bal }));
+      }
     }
-  }, [wallet.isRealWeb3, wallet.address, fetchOnChainBalance, getInjectedProvider]);
+  }, [wallet.isRealWeb3, wallet.address, wallet.balance, fetchOnChainBalance, getInjectedProvider]);
 
   // Switch or Add MST Network
   const switchToMstNetwork = useCallback(async (): Promise<boolean> => {
@@ -448,19 +455,25 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const injected = getInjectedProvider();
     if (!injected) return;
 
-    const handleAccountsChanged = (accounts: string[]) => {
+    const handleAccountsChanged = async (accounts: string[]) => {
       if (!accounts || accounts.length === 0) {
         disconnectWallet();
       } else if (providerRef.current) {
         const newAccount = accounts[0];
-        fetchOnChainBalance(newAccount, providerRef.current, injected).then(bal => {
-          setWallet(prev => ({
-            ...prev,
-            address: newAccount,
-            truncatedAddress: truncateAddress(newAccount),
-            balance: bal,
-          }));
-        });
+        let newSigner: ethers.Signer | undefined;
+        try {
+          newSigner = await providerRef.current.getSigner(newAccount);
+        } catch {
+          // ignore
+        }
+        const bal = await fetchOnChainBalance(newAccount, providerRef.current, injected);
+        setWallet(prev => ({
+          ...prev,
+          address: newAccount,
+          truncatedAddress: truncateAddress(newAccount),
+          balance: bal,
+          signer: newSigner || prev.signer,
+        }));
       }
     };
 

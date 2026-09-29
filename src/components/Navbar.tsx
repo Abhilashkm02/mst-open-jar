@@ -3,12 +3,12 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { WalletButton } from "./WalletButton";
-import { Compass, Briefcase, Wallet, Sliders } from "lucide-react";
+import { Compass, Briefcase, Wallet, Sliders, Sparkles } from "lucide-react";
 import { useWallet } from "@/context/WalletContext";
 
 interface NavbarProps {
-  activeTab: "explore" | "my-jars";
-  setActiveTab: (tab: "explore" | "my-jars") => void;
+  activeTab: "explore" | "my-jars" | "allotment";
+  setActiveTab: (tab: "explore" | "my-jars" | "allotment") => void;
   onOpenIssuerConsole?: () => void;
 }
 
@@ -111,6 +111,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                 />
               )}
             </button>
+
+            <button
+              onClick={() => setActiveTab("allotment")}
+              className={`relative h-full flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider transition-colors focus-visible:outline-none ${
+                activeTab === "allotment" ? "text-paper" : "text-paper-muted hover:text-paper"
+              }`}
+            >
+              <span>Allotment Status</span>
+              <span className="px-1.5 py-0.5 text-[9px] font-mono rounded bg-cobalt/20 text-cobalt border border-cobalt/30 flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5" />
+                <span>VRF</span>
+              </span>
+              {activeTab === "allotment" && (
+                <motion.div
+                  layoutId="nav-underline"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-cobalt"
+                  transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                />
+              )}
+            </button>
           </nav>
 
           {/* Right Action Bar */}
@@ -135,7 +155,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </header>
 
       {/* Mobile Bottom Tab Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-ink-surface border-t border-hairline py-2 px-6 flex items-center justify-around select-none">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-ink-surface border-t border-hairline py-2 px-4 flex items-center justify-around select-none">
         <button
           onClick={() => setActiveTab("explore")}
           className={`flex flex-col items-center gap-1 text-[10px] font-medium tracking-wide transition-colors ${
@@ -154,6 +174,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Briefcase className="w-4 h-4 stroke-[1.5]" />
           <span>My Jars</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("allotment")}
+          className={`flex flex-col items-center gap-1 text-[10px] font-medium tracking-wide transition-colors ${
+            activeTab === "allotment" ? "text-cobalt" : "text-paper-muted"
+          }`}
+        >
+          <Sparkles className="w-4 h-4 stroke-[1.5]" />
+          <span>Allotment</span>
         </button>
 
         {onOpenIssuerConsole && (

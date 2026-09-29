@@ -6,7 +6,7 @@ import { IpoJar } from "@/types";
 import { StatusBadge } from "./StatusBadge";
 import { JarGauge } from "./JarGauge";
 import { formatMST } from "@/lib/formatUtils";
-import { ArrowUpRight, Lock, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowUpRight, Lock, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 
 interface JarCardProps {
   jar: IpoJar;
@@ -42,12 +42,16 @@ export const JarCard: React.FC<JarCardProps> = ({
             <div>
               {/* Top metadata strip */}
               <div className="flex items-center justify-between pb-4 border-b border-hairline">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <span className="font-mono text-xs uppercase tracking-wider text-paper-dim">
                     {jar.id}
                   </span>
                   <span className="text-[10px] font-mono uppercase tracking-widest text-cobalt bg-cobalt/10 border border-cobalt/20 px-2 py-0.5 rounded-tag">
                     FEATURED PROSPECTUS
+                  </span>
+                  <span className="text-[10px] font-mono text-cobalt bg-cobalt/10 border border-cobalt/20 px-2 py-0.5 rounded-tag flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-cobalt" />
+                    <span>CHAINLINK VRF ALLOTMENT</span>
                   </span>
                 </div>
                 <StatusBadge status={jar.status} label={jar.statusLabel} />
@@ -153,9 +157,17 @@ export const JarCard: React.FC<JarCardProps> = ({
       <div>
         {/* Top Row: Lot ID left, Status Badge right */}
         <div className="flex items-center justify-between pb-3 border-b border-hairline">
-          <span className="font-mono text-xs text-paper-dim uppercase tracking-wider">
-            {jar.id}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-paper-dim uppercase tracking-wider">
+              {jar.id}
+            </span>
+            {jar.vrfAllotment && (
+              <span className="text-[9px] font-mono text-cobalt bg-cobalt/10 border border-cobalt/20 px-1.5 py-0.5 rounded flex items-center gap-1" title="Chainlink VRF Allotment Verified">
+                <Sparkles className="w-2.5 h-2.5" />
+                <span>VRF</span>
+              </span>
+            )}
+          </div>
           <StatusBadge status={jar.status} label={jar.statusLabel} />
         </div>
 

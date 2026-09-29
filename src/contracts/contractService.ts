@@ -31,7 +31,11 @@ export class ContractService {
     if (providerOrSigner) {
       return new ethers.Contract(IPO_CONTRACT_ADDRESS, IPO_CONTRACT_ABI, providerOrSigner);
     }
-    const rpcProvider = new ethers.JsonRpcProvider(this.defaultRpc);
+    const rpcProvider = new ethers.JsonRpcProvider(
+      this.defaultRpc,
+      { chainId: 1088, name: "MST Testnet" },
+      { staticNetwork: true }
+    );
     return new ethers.Contract(IPO_CONTRACT_ADDRESS, IPO_CONTRACT_ABI, rpcProvider);
   }
 
@@ -128,7 +132,7 @@ export class ContractService {
     } catch (err: any) {
       if (err?.code === 'UNPREDICTABLE_GAS_LIMIT' || err?.message?.includes('gas')) {
         const tx = await contract.claimReturns({
-          gasLimit: BigInt(250000),
+          gasLimit: BigInt(350000),
         });
         return await tx.wait();
       }
@@ -173,6 +177,45 @@ export class ContractService {
         return await tx.wait();
       }
       throw err;
+    }
+  }
+
+  // Request Chainlink VRF Allotment Draw (Manager only)
+  public async requestAllotmentDraw(signer: ethers.Signer): Promise<ethers.ContractTransactionReceipt | null> {
+    const contract = this.getWritableContract(signer);
+    try {
+      const tx = await contract.requestAllotmentDraw();
+      return await tx.wait();
+    } catch (err: any) {
+      if (err?.code === 'UNPREDICTABLE_GAS_LIMIT' || err?.message?.includes('gas')) {
+        const tx = await contract.requestAllotmentDraw({
+          gasLimit: BigInt(350000),
+        });
+        return await tx.wait();
+      }
+      throw err;
+    }
+  }
+
+  // Fetch Chainlink VRF Allotment status
+  public async fetchVRFAllotmentStatus(customProvider?: ethers.Provider): Promise<{
+    fulfilled: boolean;
+    requestId: string;
+    randomSeed: string;
+    isAllotted: boolean;
+  } | null> {
+    try {
+      const contract = this.getReadOnlyContract(customProvider);
+      const res = await contract.getAllotmentDrawResult();
+      return {
+        fulfilled: Boolean(res[0]),
+        requestId: res[1]?.toString() || "0",
+        randomSeed: res[2]?.toString() || "0",
+        isAllotted: Boolean(res[3]),
+      };
+    } catch (error) {
+      console.warn('VRF result read fallback:', error);
+      return null;
     }
   }
 }

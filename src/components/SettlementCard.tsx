@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 
 interface SettlementCardProps {
@@ -201,12 +202,22 @@ export const SettlementCard: React.FC<SettlementCardProps> = ({
         </div>
       )}
 
-      {/* Verified by Smart Contract Hairline Strip */}
-      <div className="pt-3 border-t border-hairline flex flex-wrap items-center justify-between text-[11px] font-mono text-paper-dim">
-        <div className="flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-accentEmerald" />
-          <span>Verified by smart contract: {truncateAddress(investment.contractAddress)}</span>
+      {/* Verified by Smart Contract & Chainlink VRF Hairline Strip */}
+      <div className="pt-3 border-t border-hairline flex flex-wrap items-center justify-between text-[11px] font-mono text-paper-dim gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-accentEmerald" />
+            <span>Smart Contract: {truncateAddress(investment.contractAddress)}</span>
+          </div>
+
+          {(jar?.vrfAllotment || investment.isVrfVerified) && (
+            <div className="flex items-center gap-1.5 text-cobalt bg-cobalt/10 px-2 py-0.5 rounded border border-cobalt/20" title={`Chainlink VRF Random Seed: ${jar?.vrfAllotment?.randomSeed || investment.vrfSeed}`}>
+              <Sparkles className="w-3 h-3" />
+              <span>Chainlink VRF: {jar?.vrfAllotment?.drawSeedFormatted || investment.vrfSeed || "0x7a29...b194"}</span>
+            </div>
+          )}
         </div>
+
         {investment.settledDate && (
           <span>Settled on {investment.settledDate}</span>
         )}
