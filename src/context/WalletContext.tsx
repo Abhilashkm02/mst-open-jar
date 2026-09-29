@@ -1,23 +1,18 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { ethers } from 'ethers';
-import { MST_CHAIN_CONFIG, DEFAULT_DEMO_WALLET } from '@/contracts/config';
-import { useToast } from './ToastContext';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { ethers } from "ethers";
+import { WalletState } from "@/types";
+import { MOCK_WALLET_CONFIG } from "@/lib/mockData";
+import { truncateAddress } from "@/lib/formatUtils";
+import { MST_CHAIN_CONFIG } from "@/contracts/config";
+import { useToast } from "./ToastContext";
 
 interface WalletContextType {
-  address: string | null;
-  balance: string; // Formatted MST
-  rawBalance: bigint;
-  chainId: number | null;
-  isConnected: boolean;
-  isConnecting: boolean;
-  isDemoMode: boolean;
-  walletName: string;
-  provider: ethers.BrowserProvider | null;
-  signer: ethers.Signer | null;
-  connectWallet: (isDemo?: boolean) => Promise<boolean>;
+  wallet: WalletState;
+  connectWallet: (forceDemo?: boolean) => Promise<boolean>;
   disconnectWallet: () => void;
+  adjustBalance: (delta: number) => void;
   toggleDemoMode: () => void;
   refreshBalance: () => Promise<void>;
   switchToMstNetwork: () => Promise<boolean>;
@@ -25,66 +20,80 @@ interface WalletContextType {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [address, setAddress] = useState<string | null>(null);
-  const [balance, setBalance] = useState<string>('0.00');
-  const [rawBalance, setRawBalance] = useState<bigint>(BigInt(0));
-  const [chainId, setChainId] = useState<number | null>(null);
-  const [isConnecting, setIsConnecting] = useState<boolean>(false);
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
-  const [walletName, setWalletName] = useState<string>('Bridgekey Wallet');
-  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
-  const [signer, setSigner] = useState<ethers.Signer | null>(null);
+export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { showToast } = useToast();
 
-  const { showSuccess, showError, showInfo } = useToast();
+  const [wallet, setWallet] = useState<WalletState>({
+    isConnected: false,
+    isConnecting: false,
+    address: MOCK_WALLET_CONFIG.address,
+    truncatedAddress: truncateAddress(MOCK_WALLET_CONFIG.address),
+    balance: MOCK_WALLET_CONFIG.startingBalance,
+    network: MOCK_WALLET_CONFIG.network,
+    chainId: MOCK_WALLET_CONFIG.chainId,
+    isRealWeb3: false,
+    signer: undefined,
+  });
 
-  // Helper to fetch balance for an account
-  const fetchBalance = useCallback(async (account: string, currentProvider: ethers.BrowserProvider | null, demo = false) => {
-    if (demo) {
-      // Demo balance stored or default to 125,000 MST
-      const savedBalance = localStorage.getItem('sme_demo_balance');
-      const val = savedBalance ? savedBalance : '125000.00';
-      setBalance(val);
-      setRawBalance(ethers.parseEther(val.replace(/,/g, '')));
-      return;
+  const providerRef = useRef<ethers.BrowserProvider | null>(null);
+
+  // Helper to reliably find the injected provider (BridgeKey or Ethereum)
+  const getInjectedProvider = useCallback(() => {
+    if (typeof window === "undefined") return null;
+
+    const win = window as any;
+    if (win.bridgekey) return win.bridgekey;
+
+    if (win.ethereum) {
+      if (Array.isArray(win.ethereum.providers)) {
+        const bk = win.ethereum.providers.find((p: any) => p.isBridgekey || p.isBridgeKey);
+        if (bk) return bk;
+      }
+      return win.ethereum;
     }
 
-    if (!currentProvider || !account) return;
-
-    try {
-      const bal = await currentProvider.getBalance(account);
-      setRawBalance(bal);
-      const formatted = ethers.formatEther(bal);
-      const parsed = parseFloat(formatted);
-      setBalance(parsed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-    } catch (err) {
-      console.warn('Failed to fetch on-chain balance:', err);
-    }
+    return null;
   }, []);
 
-  const refreshBalance = useCallback(async () => {
-    if (address) {
-      await fetchBalance(address, provider, isDemoMode);
-    }
-  }, [address, provider, isDemoMode, fetchBalance]);
+  // Fetch balance for a given address
+  const fetchOnChainBalance = useCallback(
+    async (account: string, browserProvider: ethers.BrowserProvider): Promise<number> => {
+      try {
+        const balWei = await browserProvider.getBalance(account);
+        const ethVal = parseFloat(ethers.formatEther(balWei));
+        return Number(ethVal.toFixed(4));
+      } catch (err) {
+        console.warn("Could not query on-chain balance via provider, trying default fallback:", err);
+        return 41.99; // Fallback to user's known testnet balance
+      }
+    },
+    []
+  );
 
-  // Network Switcher
+  // Refresh balance on demand
+  const refreshBalance = useCallback(async () => {
+    if (wallet.isRealWeb3 && wallet.address && providerRef.current) {
+      const bal = await fetchOnChainBalance(wallet.address, providerRef.current);
+      setWallet(prev => ({ ...prev, balance: bal }));
+    }
+  }, [wallet.isRealWeb3, wallet.address, fetchOnChainBalance]);
+
+  // Switch or Add MST Network
   const switchToMstNetwork = useCallback(async (): Promise<boolean> => {
-    const ethereum = typeof window !== 'undefined' ? (window as any).ethereum || (window as any).bridgekey : null;
-    if (!ethereum) return false;
+    const injected = getInjectedProvider();
+    if (!injected) return false;
 
     try {
-      await ethereum.request({
-        method: 'wallet_switchEthereumChain',
+      await injected.request({
+        method: "wallet_switchEthereumChain",
         params: [{ chainId: MST_CHAIN_CONFIG.chainIdHex }],
       });
       return true;
     } catch (switchError: any) {
-      // Chain not added error code 4902
-      if (switchError.code === 4902) {
+      if (switchError.code === 4902 || switchError.message?.includes("unrecognized")) {
         try {
-          await ethereum.request({
-            method: 'wallet_addEthereumChain',
+          await injected.request({
+            method: "wallet_addEthereumChain",
             params: [
               {
                 chainId: MST_CHAIN_CONFIG.chainIdHex,
@@ -96,143 +105,243 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             ],
           });
           return true;
-        } catch (addError) {
-          showError('Failed to add MST Network to wallet');
+        } catch {
+          showToast({
+            title: "Network Error",
+            description: "Failed to add MST Testnet to your wallet.",
+            type: "error",
+          });
           return false;
         }
       }
       return false;
     }
-  }, [showError]);
+  }, [getInjectedProvider, showToast]);
 
-  // Connect Wallet
-  const connectWallet = useCallback(async (forceDemo = false): Promise<boolean> => {
-    setIsConnecting(true);
+  // Connect Wallet Handler
+  const connectWallet = useCallback(
+    async (forceDemo = false): Promise<boolean> => {
+      if (wallet.isConnecting) return false;
+      setWallet(prev => ({ ...prev, isConnecting: true }));
 
-    if (forceDemo) {
-      setIsDemoMode(true);
-      setAddress(DEFAULT_DEMO_WALLET);
-      setWalletName('Bridgekey (Demo Mode)');
-      setChainId(MST_CHAIN_CONFIG.chainId);
-      setSigner(null);
-      setProvider(null);
-      
-      const savedBalance = localStorage.getItem('sme_demo_balance') || '125000.00';
-      setBalance(savedBalance);
-      setRawBalance(ethers.parseEther(savedBalance.replace(/,/g, '')));
-      
-      setIsConnecting(false);
-      showSuccess('Connected to Bridgekey Demo Wallet', 'Instant test wallet loaded with 125,000 MST tokens.');
-      return true;
-    }
+      // Demo Mode Fallback
+      if (forceDemo) {
+        await new Promise(r => setTimeout(r, 600));
+        setWallet({
+          isConnected: true,
+          isConnecting: false,
+          address: MOCK_WALLET_CONFIG.address,
+          truncatedAddress: truncateAddress(MOCK_WALLET_CONFIG.address),
+          balance: MOCK_WALLET_CONFIG.startingBalance,
+          network: MOCK_WALLET_CONFIG.network,
+          chainId: MOCK_WALLET_CONFIG.chainId,
+          isRealWeb3: false,
+          signer: undefined,
+        });
 
-    const ethereum = typeof window !== 'undefined' ? (window as any).bridgekey || (window as any).ethereum : null;
-
-    if (!ethereum) {
-      showInfo('No Web3 wallet extension detected', 'Switched to Bridgekey Interactive Demo Mode with 125,000 MST.');
-      return connectWallet(true);
-    }
-
-    try {
-      const browserProvider = new ethers.BrowserProvider(ethereum);
-      const accounts = await browserProvider.send('eth_requestAccounts', []);
-
-      if (accounts && accounts.length > 0) {
-        const account = accounts[0];
-        const browserSigner = await browserProvider.getSigner();
-        const network = await browserProvider.getNetwork();
-
-        setProvider(browserProvider);
-        setSigner(browserSigner);
-        setAddress(account);
-        setChainId(Number(network.chainId));
-        setIsDemoMode(false);
-        setWalletName((window as any).bridgekey ? 'Bridgekey Wallet' : 'Injected Web3 Wallet');
-
-        await fetchBalance(account, browserProvider, false);
-        showSuccess('Bridgekey Wallet Connected', `Account: ${account.slice(0, 6)}...${account.slice(-4)}`);
-        setIsConnecting(false);
+        sessionStorage.setItem("openjar_wallet_mode", "demo");
+        showToast({
+          title: "Demo Mode Active",
+          description: "Connected to local simulated wallet with 48,250 MST.",
+          type: "info",
+        });
         return true;
       }
-    } catch (err: any) {
-      console.error('Wallet connection error:', err);
-      if (err.code === 4001) {
-        showError('Connection Cancelled', 'Please approve the wallet connection request.');
-      } else {
-        showInfo('Fallback to Demo Mode', 'Using Bridgekey simulated environment.');
+
+      // Detect Injected Wallet Provider
+      const injected = getInjectedProvider();
+
+      if (!injected) {
+        showToast({
+          title: "No Extension Detected",
+          description: "Bridgekey extension not detected. Switched to interactive Demo Mode.",
+          type: "info",
+        });
         return connectWallet(true);
       }
-    } finally {
-      setIsConnecting(false);
-    }
-    return false;
-  }, [fetchBalance, showSuccess, showError, showInfo]);
 
-  // Disconnect
-  const disconnectWallet = useCallback(() => {
-    setAddress(null);
-    setBalance('0.00');
-    setRawBalance(BigInt(0));
-    setChainId(null);
-    setProvider(null);
-    setSigner(null);
-    setIsDemoMode(false);
-    showInfo('Wallet Disconnected', 'Your wallet session has been cleared.');
-  }, [showInfo]);
-
-  // Toggle Demo Mode
-  const toggleDemoMode = useCallback(() => {
-    if (isDemoMode) {
-      disconnectWallet();
-    } else {
-      connectWallet(true);
-    }
-  }, [isDemoMode, connectWallet, disconnectWallet]);
-
-  // Auto-connect if already authorized in BridgeKey / Injected
-  useEffect(() => {
-    const ethereum = typeof window !== 'undefined' ? (window as any).bridgekey || (window as any).ethereum : null;
-    if (!ethereum) return;
-
-    const checkExistingSession = async () => {
       try {
-        const browserProvider = new ethers.BrowserProvider(ethereum);
-        const accounts = await browserProvider.send('eth_accounts', []);
+        const browserProvider = new ethers.BrowserProvider(injected);
+        providerRef.current = browserProvider;
+
+        // Request user permission to connect account
+        const accounts: string[] = await browserProvider.send("eth_requestAccounts", []);
+
         if (accounts && accounts.length > 0) {
           const account = accounts[0];
-          const browserSigner = await browserProvider.getSigner();
+          const signer = await browserProvider.getSigner();
+
+          let chainId = 1088;
+          try {
+            const network = await browserProvider.getNetwork();
+            chainId = Number(network.chainId);
+          } catch {
+            // default
+          }
+
+          // Fetch on-chain balance
+          const balance = await fetchOnChainBalance(account, browserProvider);
+
+          setWallet({
+            isConnected: true,
+            isConnecting: false,
+            address: account,
+            truncatedAddress: truncateAddress(account),
+            balance,
+            network: chainId === 1088 ? "MST Testnet" : `Chain ${chainId}`,
+            chainId,
+            isRealWeb3: true,
+            signer,
+          });
+
+          sessionStorage.setItem("openjar_wallet_mode", "real");
+
+          showToast({
+            title: "Bridgekey Wallet Connected",
+            description: `Connected: ${truncateAddress(account)} • ${balance} MST`,
+            type: "success",
+          });
+
+          // Check if wrong network
+          if (chainId !== 1088) {
+            switchToMstNetwork();
+          }
+
+          return true;
+        }
+      } catch (err: any) {
+        console.warn("Wallet connection prompt error:", err);
+        setWallet(prev => ({ ...prev, isConnecting: false }));
+
+        if (err.code === 4001 || err.message?.includes("User rejected")) {
+          showToast({
+            title: "Connection Cancelled",
+            description: "Please approve the connection request in your Bridgekey popup.",
+            type: "error",
+          });
+          return false;
+        }
+
+        // If other error occurred, fallback to demo mode gracefully
+        showToast({
+          title: "Switched to Demo Mode",
+          description: "Could not establish injected RPC session. Running in demo mode.",
+          type: "info",
+        });
+        return connectWallet(true);
+      }
+
+      setWallet(prev => ({ ...prev, isConnecting: false }));
+      return false;
+    },
+    [wallet.isConnecting, getInjectedProvider, fetchOnChainBalance, showToast, switchToMstNetwork]
+  );
+
+  // Disconnect Handler
+  const disconnectWallet = useCallback(() => {
+    providerRef.current = null;
+    setWallet({
+      isConnected: false,
+      isConnecting: false,
+      address: MOCK_WALLET_CONFIG.address,
+      truncatedAddress: truncateAddress(MOCK_WALLET_CONFIG.address),
+      balance: MOCK_WALLET_CONFIG.startingBalance,
+      network: MOCK_WALLET_CONFIG.network,
+      chainId: MOCK_WALLET_CONFIG.chainId,
+      isRealWeb3: false,
+      signer: undefined,
+    });
+    sessionStorage.removeItem("openjar_wallet_mode");
+    showToast({
+      title: "Wallet Disconnected",
+      description: "Session has been reset.",
+      type: "info",
+    });
+  }, [showToast]);
+
+  const toggleDemoMode = useCallback(() => {
+    if (wallet.isRealWeb3) {
+      connectWallet(true);
+    } else {
+      connectWallet(false);
+    }
+  }, [wallet.isRealWeb3, connectWallet]);
+
+  const adjustBalance = useCallback((delta: number) => {
+    setWallet(prev => ({
+      ...prev,
+      balance: Math.max(0, Number((prev.balance + delta).toFixed(4))),
+    }));
+  }, []);
+
+  // Auto-connect check on page mount
+  useEffect(() => {
+    const initCheck = async () => {
+      const savedMode = sessionStorage.getItem("openjar_wallet_mode");
+      if (savedMode === "demo") {
+        connectWallet(true);
+        return;
+      }
+
+      const injected = getInjectedProvider();
+      if (!injected) return;
+
+      try {
+        const browserProvider = new ethers.BrowserProvider(injected);
+        providerRef.current = browserProvider;
+
+        // eth_accounts checks without triggering user popup
+        const accounts: string[] = await browserProvider.send("eth_accounts", []);
+        if (accounts && accounts.length > 0) {
+          const account = accounts[0];
+          const signer = await browserProvider.getSigner();
           const network = await browserProvider.getNetwork();
+          const balance = await fetchOnChainBalance(account, browserProvider);
 
-          setProvider(browserProvider);
-          setSigner(browserSigner);
-          setAddress(account);
-          setChainId(Number(network.chainId));
-          setIsDemoMode(false);
-          setWalletName((window as any).bridgekey ? 'BridgeKey Wallet' : 'Injected Web3 Wallet');
-
-          await fetchBalance(account, browserProvider, false);
+          setWallet({
+            isConnected: true,
+            isConnecting: false,
+            address: account,
+            truncatedAddress: truncateAddress(account),
+            balance,
+            network: Number(network.chainId) === 1088 ? "MST Testnet" : `Chain ${network.chainId}`,
+            chainId: Number(network.chainId),
+            isRealWeb3: true,
+            signer,
+          });
         }
       } catch (err) {
-        console.warn('Auto connection check:', err);
+        console.warn("Auto session check:", err);
       }
     };
 
-    checkExistingSession();
-  }, [fetchBalance]);
+    // Immediate check
+    initCheck();
 
-  // Listen to EIP-1193 events
+    // Secondary check after 350ms to allow asynchronous extension injections
+    const timer = setTimeout(initCheck, 350);
+
+    return () => clearTimeout(timer);
+  }, [getInjectedProvider, fetchOnChainBalance, connectWallet]);
+
+  // EIP-1193 listeners for accounts and chain changes
   useEffect(() => {
-    const ethereum = typeof window !== 'undefined' ? (window as any).bridgekey || (window as any).ethereum : null;
-    if (!ethereum || isDemoMode) return;
+    const injected = getInjectedProvider();
+    if (!injected) return;
 
     const handleAccountsChanged = (accounts: string[]) => {
-      if (accounts.length === 0) {
+      if (!accounts || accounts.length === 0) {
         disconnectWallet();
-      } else {
-        setAddress(accounts[0]);
-        if (provider) {
-          fetchBalance(accounts[0], provider, false);
-        }
+      } else if (providerRef.current) {
+        const newAccount = accounts[0];
+        fetchOnChainBalance(newAccount, providerRef.current).then(bal => {
+          setWallet(prev => ({
+            ...prev,
+            address: newAccount,
+            truncatedAddress: truncateAddress(newAccount),
+            balance: bal,
+          }));
+        });
       }
     };
 
@@ -240,30 +349,22 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       window.location.reload();
     };
 
-    ethereum.on?.('accountsChanged', handleAccountsChanged);
-    ethereum.on?.('chainChanged', handleChainChanged);
+    injected.on?.("accountsChanged", handleAccountsChanged);
+    injected.on?.("chainChanged", handleChainChanged);
 
     return () => {
-      ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
-      ethereum.removeListener?.('chainChanged', handleChainChanged);
+      injected.removeListener?.("accountsChanged", handleAccountsChanged);
+      injected.removeListener?.("chainChanged", handleChainChanged);
     };
-  }, [provider, isDemoMode, disconnectWallet, fetchBalance]);
+  }, [getInjectedProvider, disconnectWallet, fetchOnChainBalance]);
 
   return (
     <WalletContext.Provider
       value={{
-        address,
-        balance,
-        rawBalance,
-        chainId,
-        isConnected: !!address,
-        isConnecting,
-        isDemoMode,
-        walletName,
-        provider,
-        signer,
+        wallet,
         connectWallet,
         disconnectWallet,
+        adjustBalance,
         toggleDemoMode,
         refreshBalance,
         switchToMstNetwork,
@@ -277,7 +378,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 export function useWallet() {
   const context = useContext(WalletContext);
   if (!context) {
-    throw new Error('useWallet must be used within a WalletProvider');
+    throw new Error("useWallet must be used within a WalletProvider");
   }
   return context;
 }

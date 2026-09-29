@@ -9,47 +9,71 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        brand: {
-          bg: "#080B11",
-          surface: "#0F1420",
-          surfaceHover: "#151C2C",
-          surfaceLight: "#1C2438",
-          border: "#1E293B",
-          borderHighlight: "#334155",
-          cyan: "#00E5FF",
-          cyanDim: "#00E5FF18",
-          emerald: "#10B981",
-          emeraldDim: "#10B98118",
-          amber: "#F59E0B",
-          amberDim: "#F59E0B18",
-          rose: "#F43F5E",
-          roseDim: "#F43F5E18",
-          indigo: "#6366F1",
-          blue: "#2563EB",
-          textPrimary: "#F8FAFC",
-          textMuted: "#94A3B8",
-          textDim: "#64748B",
+        ink: {
+          DEFAULT: "#0D0E10",
+          surface: "#14161A",
+          elevated: "#1A1D22",
+          subtle: "#101215",
+          border: "rgba(255, 255, 255, 0.08)",
+          borderHover: "rgba(255, 255, 255, 0.16)",
+        },
+        paper: {
+          DEFAULT: "#EDEAE3",
+          muted: "#8B8D93",
+          dim: "#5E6066",
+        },
+        cobalt: {
+          DEFAULT: "#3D5AFE",
+          hover: "#304FFE",
+          subtle: "rgba(61, 90, 254, 0.12)",
+          border: "rgba(61, 90, 254, 0.35)",
+        },
+        accentEmerald: {
+          DEFAULT: "#2FBF8F",
+          subtle: "rgba(47, 191, 143, 0.12)",
+          border: "rgba(47, 191, 143, 0.30)",
+        },
+        accentAmber: {
+          DEFAULT: "#E0A83A",
+          subtle: "rgba(224, 168, 58, 0.12)",
+          border: "rgba(224, 168, 58, 0.30)",
+        },
+        accentSteel: {
+          DEFAULT: "#5B8DEF",
+          subtle: "rgba(91, 141, 239, 0.12)",
+          border: "rgba(91, 141, 239, 0.30)",
+        },
+        accentBrick: {
+          DEFAULT: "#D95C5C",
+          subtle: "rgba(217, 92, 92, 0.12)",
+          border: "rgba(217, 92, 92, 0.30)",
+        },
+        hairline: {
+          DEFAULT: "rgba(255, 255, 255, 0.08)",
+          bright: "rgba(255, 255, 255, 0.16)",
+          subtle: "rgba(255, 255, 255, 0.04)",
         }
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'Fira Code', 'Courier New', 'monospace'],
-        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        serif: ['var(--font-serif)', 'Fraunces', 'Instrument Serif', 'Georgia', 'serif'],
+        sans: ['var(--font-sans)', 'Manrope', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'JetBrains Mono', 'IBM Plex Mono', 'monospace'],
       },
-      boxShadow: {
-        'glow-cyan': '0 0 25px -5px rgba(0, 229, 255, 0.3)',
-        'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
-        'glow-amber': '0 0 25px -5px rgba(245, 158, 11, 0.3)',
-        'glow-card': '0 10px 30px -10px rgba(0, 0, 0, 0.5)',
+      borderRadius: {
+        card: "6px",
+        cardLg: "8px",
+        btn: "4px",
+        input: "4px",
+        tag: "3px",
       },
-      animation: {
-        'pulse-subtle': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'shimmer': 'shimmer 2s linear infinite',
+      transitionTimingFunction: {
+        editorial: "cubic-bezier(0.22, 1, 0.36, 1)",
       },
-      keyframes: {
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        }
+      backgroundImage: {
+        'dot-grid': "radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px)",
+      },
+      backgroundSize: {
+        'dot-grid': '24px 24px',
       }
     },
   },

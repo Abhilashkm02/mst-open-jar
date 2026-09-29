@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/context/ToastContext";
 import { WalletProvider } from "@/context/WalletContext";
-import { IpoProvider } from "@/context/IpoContext";
+import { JarsProvider } from "@/context/JarsContext";
 import { ToastContainer } from "@/components/ToastContainer";
 
 export const metadata: Metadata = {
-  title: "MST Open Jar | SME IPO Fractionalization Protocol",
-  description: "Democratizing high-ticket SME IPO lots on the MST blockchain. Pool micro-tokens with non-custodial smart contracts and zero-bias allotment.",
-  keywords: ["SME IPO", "MST Blockchain", "Fractionalization", "Bridgekey", "Web3 FinTech", "Open Jar"],
+  title: "OpenJar — The Prospectus Ledger | SME IPO Fractionalization",
+  description:
+    "A private-bank prospectus crossed with an on-chain ledger. Democratizing high-ticket SME IPOs on the MST blockchain.",
+  keywords: ["SME IPO", "MST Blockchain", "Fractionalization", "OpenJar", "Fintech", "DeFi"],
 };
 
 export default function RootLayout({
@@ -18,13 +19,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#070A11] text-slate-100 min-h-screen selection:bg-brand-cyan/30 selection:text-white antialiased">
+      <body className="bg-ink text-paper min-h-screen antialiased bg-grid-texture selection:bg-cobalt/30 selection:text-white">
         <ToastProvider>
           <WalletProvider>
-            <IpoProvider>
+            <JarsProvider>
               <ToastContainer />
               {children}
-            </IpoProvider>
+            </JarsProvider>
           </WalletProvider>
         </ToastProvider>
       </body>
