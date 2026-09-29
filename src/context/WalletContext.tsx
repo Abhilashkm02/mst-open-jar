@@ -155,15 +155,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [getInjectedProvider, showToast]);
 
+  const isConnectingRef = useRef(false);
+
   // Connect Wallet Handler
   const connectWallet = useCallback(
     async (forceDemo = false): Promise<boolean> => {
-      if (wallet.isConnecting) return false;
+      if (isConnectingRef.current) return false;
+      isConnectingRef.current = true;
       setWallet(prev => ({ ...prev, isConnecting: true }));
 
       // 1. Explicit Demo Mode
       if (forceDemo) {
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 200));
         setWallet({
           isConnected: true,
           isConnecting: false,
@@ -177,6 +180,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
 
         sessionStorage.setItem("openjar_wallet_mode", "demo");
+        isConnectingRef.current = false;
         showToast({
           title: "Demo Mode Active",
           description: "Connected to local simulated wallet with 40 MST.",
@@ -197,6 +201,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (!injected) {
+        isConnectingRef.current = false;
         setWallet(prev => ({ ...prev, isConnecting: false }));
         showToast({
           title: "Wallet Extension Not Found",
@@ -276,10 +281,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }, 500);
           }
 
+          isConnectingRef.current = false;
           return true;
         }
       } catch (err: any) {
         console.warn("Wallet connection prompt error:", err);
+        isConnectingRef.current = false;
         setWallet(prev => ({ ...prev, isConnecting: false }));
 
         if (err.code === 4001 || err.message?.includes("rejected") || err.message?.includes("User rejected")) {
@@ -308,15 +315,17 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return false;
       }
 
+      isConnectingRef.current = false;
       setWallet(prev => ({ ...prev, isConnecting: false }));
       return false;
     },
-    [wallet.isConnecting, getInjectedProvider, fetchOnChainBalance, showToast, switchToMstNetwork]
+    [getInjectedProvider, fetchOnChainBalance, showToast, switchToMstNetwork]
   );
 
   // Disconnect Handler
   const disconnectWallet = useCallback(() => {
     providerRef.current = null;
+    isConnectingRef.current = false;
     setWallet({
       isConnected: false,
       isConnecting: false,
@@ -351,17 +360,30 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }));
   }, []);
 
-  // Auto-connect check on page mount
+  // Auto-connect check on page mount - strictly runs ONCE
+  const hasMountedRef = useRef(false);
+
   useEffect(() => {
-    let isCancelled = false;
+    if (hasMountedRef.current) return;
+    hasMountedRef.current = true;
+
+    const savedMode = typeof window !== "undefined" ? sessionStorage.getItem("openjar_wallet_mode") : null;
+    if (savedMode === "demo") {
+      setWallet({
+        isConnected: true,
+        isConnecting: false,
+        address: MOCK_WALLET_CONFIG.address,
+        truncatedAddress: truncateAddress(MOCK_WALLET_CONFIG.address),
+        balance: MOCK_WALLET_CONFIG.startingBalance,
+        network: MOCK_WALLET_CONFIG.network,
+        chainId: MOCK_WALLET_CONFIG.chainId,
+        isRealWeb3: false,
+        signer: undefined,
+      });
+      return;
+    }
 
     const initCheck = async () => {
-      const savedMode = sessionStorage.getItem("openjar_wallet_mode");
-      if (savedMode === "demo") {
-        if (!isCancelled) connectWallet(true);
-        return;
-      }
-
       const injected = getInjectedProvider();
       if (!injected) return;
 
@@ -377,7 +399,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           accounts = await browserProvider.send("eth_accounts", []);
         }
 
-        if (accounts && accounts.length > 0 && !isCancelled) {
+        if (accounts && accounts.length > 0) {
           const account = accounts[0];
           let signer: ethers.Signer | undefined;
           try {
@@ -419,15 +441,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     initCheck();
-
-    // Check after 300ms to catch extension injections
-    const timer = setTimeout(initCheck, 300);
-
-    return () => {
-      isCancelled = true;
-      clearTimeout(timer);
-    };
-  }, [getInjectedProvider, fetchOnChainBalance, connectWallet]);
+  }, [getInjectedProvider, fetchOnChainBalance]);
 
   // EIP-1193 listeners for accounts and chain changes
   useEffect(() => {
