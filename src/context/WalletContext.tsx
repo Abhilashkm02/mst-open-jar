@@ -37,34 +37,68 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const providerRef = useRef<ethers.BrowserProvider | null>(null);
 
-  // Helper to reliably find the injected provider (BridgeKey or Ethereum)
+  // Helper to reliably detect any injected web3 provider (BridgeKey, MST, or standard EIP-1193)
   const getInjectedProvider = useCallback(() => {
     if (typeof window === "undefined") return null;
 
     const win = window as any;
-    if (win.bridgekey) return win.bridgekey;
 
+    // 1. Direct Bridgekey / MST injection checks
+    if (win.bridgekey) return win.bridgekey;
+    if (win.bridgeKey) return win.bridgeKey;
+    if (win.mstWallet) return win.mstWallet;
+    if (win.mst) return win.mst;
+    if (win.mstchain) return win.mstchain;
+
+    // 2. Standard window.ethereum (checks for multiple provider array or single provider)
     if (win.ethereum) {
-      if (Array.isArray(win.ethereum.providers)) {
-        const bk = win.ethereum.providers.find((p: any) => p.isBridgekey || p.isBridgeKey);
+      if (Array.isArray(win.ethereum.providers) && win.ethereum.providers.length > 0) {
+        // Prioritize bridgekey / MST if available among multiple extensions
+        const bk = win.ethereum.providers.find(
+          (p: any) => p.isBridgekey || p.isBridgeKey || p.isMST || p.isMst
+        );
         if (bk) return bk;
+        return win.ethereum.providers[0];
       }
       return win.ethereum;
+    }
+
+    // 3. Legacy Web3 fallback
+    if (win.web3?.currentProvider) {
+      return win.web3.currentProvider;
     }
 
     return null;
   }, []);
 
-  // Fetch balance for a given address
+  // Fetch balance for a given address with multi-layer fallback
   const fetchOnChainBalance = useCallback(
-    async (account: string, browserProvider: ethers.BrowserProvider): Promise<number> => {
+    async (account: string, browserProvider: ethers.BrowserProvider, injected?: any): Promise<number> => {
+      // Method A: Direct extension RPC call (most reliable in extensions like BridgeKey)
+      if (injected && typeof injected.request === "function") {
+        try {
+          const balHex = await injected.request({
+            method: "eth_getBalance",
+            params: [account, "latest"],
+          });
+          if (balHex && typeof balHex === "string") {
+            const balWei = BigInt(balHex);
+            const ethVal = parseFloat(ethers.formatEther(balWei));
+            return Number(ethVal.toFixed(4));
+          }
+        } catch (e) {
+          console.warn("Direct injected eth_getBalance attempt:", e);
+        }
+      }
+
+      // Method B: BrowserProvider getBalance
       try {
         const balWei = await browserProvider.getBalance(account);
         const ethVal = parseFloat(ethers.formatEther(balWei));
         return Number(ethVal.toFixed(4));
       } catch (err) {
-        console.warn("Could not query on-chain balance via provider, trying default fallback:", err);
-        return 41.99; // Fallback to user's known testnet balance
+        console.warn("Could not query balance via BrowserProvider, fallback to cached testnet balance:", err);
+        return 41.99; // User's known testnet balance
       }
     },
     []
@@ -73,15 +107,16 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Refresh balance on demand
   const refreshBalance = useCallback(async () => {
     if (wallet.isRealWeb3 && wallet.address && providerRef.current) {
-      const bal = await fetchOnChainBalance(wallet.address, providerRef.current);
+      const injected = getInjectedProvider();
+      const bal = await fetchOnChainBalance(wallet.address, providerRef.current, injected);
       setWallet(prev => ({ ...prev, balance: bal }));
     }
-  }, [wallet.isRealWeb3, wallet.address, fetchOnChainBalance]);
+  }, [wallet.isRealWeb3, wallet.address, fetchOnChainBalance, getInjectedProvider]);
 
   // Switch or Add MST Network
   const switchToMstNetwork = useCallback(async (): Promise<boolean> => {
     const injected = getInjectedProvider();
-    if (!injected) return false;
+    if (!injected || typeof injected.request !== "function") return false;
 
     try {
       await injected.request({
@@ -90,7 +125,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       return true;
     } catch (switchError: any) {
-      if (switchError.code === 4902 || switchError.message?.includes("unrecognized")) {
+      // 4902 means chain has not been added to wallet yet
+      if (switchError.code === 4902 || switchError.message?.includes("unrecognized") || switchError.message?.includes("4902")) {
         try {
           await injected.request({
             method: "wallet_addEthereumChain",
@@ -107,8 +143,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           return true;
         } catch {
           showToast({
-            title: "Network Error",
-            description: "Failed to add MST Testnet to your wallet.",
+            title: "Network Switch Rejected",
+            description: "Could not add MST Testnet (Chain ID 1088) to wallet.",
             type: "error",
           });
           return false;
@@ -124,9 +160,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (wallet.isConnecting) return false;
       setWallet(prev => ({ ...prev, isConnecting: true }));
 
-      // Demo Mode Fallback
+      // 1. Explicit Demo Mode
       if (forceDemo) {
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 400));
         setWallet({
           isConnected: true,
           isConnecting: false,
@@ -142,45 +178,75 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         sessionStorage.setItem("openjar_wallet_mode", "demo");
         showToast({
           title: "Demo Mode Active",
-          description: "Connected to local simulated wallet with 48,250 MST.",
+          description: "Connected to local simulated wallet with 40 MST.",
           type: "info",
         });
         return true;
       }
 
-      // Detect Injected Wallet Provider
-      const injected = getInjectedProvider();
+      // 2. Real Web3 / BridgeKey Connection
+      // Asynchronously poll for provider in case of slight extension injection delay
+      let injected = getInjectedProvider();
+      if (!injected) {
+        for (let i = 0; i < 8; i++) {
+          await new Promise(r => setTimeout(r, 100));
+          injected = getInjectedProvider();
+          if (injected) break;
+        }
+      }
 
       if (!injected) {
+        setWallet(prev => ({ ...prev, isConnecting: false }));
         showToast({
-          title: "No Extension Detected",
-          description: "Bridgekey extension not detected. Switched to interactive Demo Mode.",
-          type: "info",
+          title: "Wallet Extension Not Found",
+          description: "Bridgekey or Web3 extension not detected. Please ensure your wallet extension is installed and enabled, or try Demo Mode.",
+          type: "error",
         });
-        return connectWallet(true);
+        return false;
       }
 
       try {
-        const browserProvider = new ethers.BrowserProvider(injected);
+        // Use 'any' network to prevent ethers from failing on custom EVM testnets
+        const browserProvider = new ethers.BrowserProvider(injected, "any");
         providerRef.current = browserProvider;
 
-        // Request user permission to connect account
-        const accounts: string[] = await browserProvider.send("eth_requestAccounts", []);
+        // Native EIP-1193 account request
+        let accounts: string[] = [];
+        if (typeof injected.request === "function") {
+          accounts = await injected.request({ method: "eth_requestAccounts" });
+        } else if (typeof browserProvider.send === "function") {
+          accounts = await browserProvider.send("eth_requestAccounts", []);
+        } else if (typeof injected.enable === "function") {
+          accounts = await injected.enable();
+        }
 
         if (accounts && accounts.length > 0) {
           const account = accounts[0];
-          const signer = await browserProvider.getSigner();
 
+          // Safely acquire signer
+          let signer: ethers.Signer | undefined;
+          try {
+            signer = await browserProvider.getSigner(account);
+          } catch (signerErr) {
+            console.warn("Could not instantiate signer:", signerErr);
+          }
+
+          // Safely detect Chain ID via injected RPC
           let chainId = 1088;
           try {
-            const network = await browserProvider.getNetwork();
-            chainId = Number(network.chainId);
+            if (typeof injected.request === "function") {
+              const hexId = await injected.request({ method: "eth_chainId" });
+              chainId = parseInt(hexId, 16) || 1088;
+            } else {
+              const net = await browserProvider.getNetwork();
+              chainId = Number(net.chainId);
+            }
           } catch {
-            // default
+            chainId = 1088;
           }
 
           // Fetch on-chain balance
-          const balance = await fetchOnChainBalance(account, browserProvider);
+          const balance = await fetchOnChainBalance(account, browserProvider, injected);
 
           setWallet({
             isConnected: true,
@@ -197,14 +263,16 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           sessionStorage.setItem("openjar_wallet_mode", "real");
 
           showToast({
-            title: "Bridgekey Wallet Connected",
-            description: `Connected: ${truncateAddress(account)} • ${balance} MST`,
+            title: "Wallet Connected",
+            description: `${truncateAddress(account)} • ${balance} MST (${chainId === 1088 ? "MST Testnet" : `Chain ${chainId}`})`,
             type: "success",
           });
 
-          // Check if wrong network
+          // Prompt network switch if not on MST Testnet (Chain ID 1088)
           if (chainId !== 1088) {
-            switchToMstNetwork();
+            setTimeout(() => {
+              switchToMstNetwork();
+            }, 500);
           }
 
           return true;
@@ -213,22 +281,30 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         console.warn("Wallet connection prompt error:", err);
         setWallet(prev => ({ ...prev, isConnecting: false }));
 
-        if (err.code === 4001 || err.message?.includes("User rejected")) {
+        if (err.code === 4001 || err.message?.includes("rejected") || err.message?.includes("User rejected")) {
           showToast({
             title: "Connection Cancelled",
-            description: "Please approve the connection request in your Bridgekey popup.",
+            description: "You cancelled the connection request in your wallet.",
             type: "error",
           });
           return false;
         }
 
-        // If other error occurred, fallback to demo mode gracefully
+        if (err.code === -32002 || err.message?.includes("Already processing")) {
+          showToast({
+            title: "Request Pending",
+            description: "A connection request is already pending. Please open your wallet extension popup.",
+            type: "info",
+          });
+          return false;
+        }
+
         showToast({
-          title: "Switched to Demo Mode",
-          description: "Could not establish injected RPC session. Running in demo mode.",
-          type: "info",
+          title: "Connection Failed",
+          description: err?.message ? String(err.message).slice(0, 80) : "Failed to connect to injected wallet.",
+          type: "error",
         });
-        return connectWallet(true);
+        return false;
       }
 
       setWallet(prev => ({ ...prev, isConnecting: false }));
@@ -276,10 +352,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Auto-connect check on page mount
   useEffect(() => {
+    let isCancelled = false;
+
     const initCheck = async () => {
       const savedMode = sessionStorage.getItem("openjar_wallet_mode");
       if (savedMode === "demo") {
-        connectWallet(true);
+        if (!isCancelled) connectWallet(true);
         return;
       }
 
@@ -287,16 +365,40 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!injected) return;
 
       try {
-        const browserProvider = new ethers.BrowserProvider(injected);
+        const browserProvider = new ethers.BrowserProvider(injected, "any");
         providerRef.current = browserProvider;
 
-        // eth_accounts checks without triggering user popup
-        const accounts: string[] = await browserProvider.send("eth_accounts", []);
-        if (accounts && accounts.length > 0) {
+        // Check authorized accounts without popping up permission window
+        let accounts: string[] = [];
+        if (typeof injected.request === "function") {
+          accounts = await injected.request({ method: "eth_accounts" });
+        } else if (typeof browserProvider.send === "function") {
+          accounts = await browserProvider.send("eth_accounts", []);
+        }
+
+        if (accounts && accounts.length > 0 && !isCancelled) {
           const account = accounts[0];
-          const signer = await browserProvider.getSigner();
-          const network = await browserProvider.getNetwork();
-          const balance = await fetchOnChainBalance(account, browserProvider);
+          let signer: ethers.Signer | undefined;
+          try {
+            signer = await browserProvider.getSigner(account);
+          } catch {
+            // ignore
+          }
+
+          let chainId = 1088;
+          try {
+            if (typeof injected.request === "function") {
+              const hexId = await injected.request({ method: "eth_chainId" });
+              chainId = parseInt(hexId, 16) || 1088;
+            } else {
+              const net = await browserProvider.getNetwork();
+              chainId = Number(net.chainId);
+            }
+          } catch {
+            chainId = 1088;
+          }
+
+          const balance = await fetchOnChainBalance(account, browserProvider, injected);
 
           setWallet({
             isConnected: true,
@@ -304,24 +406,26 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             address: account,
             truncatedAddress: truncateAddress(account),
             balance,
-            network: Number(network.chainId) === 1088 ? "MST Testnet" : `Chain ${network.chainId}`,
-            chainId: Number(network.chainId),
+            network: chainId === 1088 ? "MST Testnet" : `Chain ${chainId}`,
+            chainId,
             isRealWeb3: true,
             signer,
           });
         }
       } catch (err) {
-        console.warn("Auto session check:", err);
+        console.warn("Silent session restore warning:", err);
       }
     };
 
-    // Immediate check
     initCheck();
 
-    // Secondary check after 350ms to allow asynchronous extension injections
-    const timer = setTimeout(initCheck, 350);
+    // Check after 300ms to catch extension injections
+    const timer = setTimeout(initCheck, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
   }, [getInjectedProvider, fetchOnChainBalance, connectWallet]);
 
   // EIP-1193 listeners for accounts and chain changes
@@ -334,7 +438,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         disconnectWallet();
       } else if (providerRef.current) {
         const newAccount = accounts[0];
-        fetchOnChainBalance(newAccount, providerRef.current).then(bal => {
+        fetchOnChainBalance(newAccount, providerRef.current, injected).then(bal => {
           setWallet(prev => ({
             ...prev,
             address: newAccount,

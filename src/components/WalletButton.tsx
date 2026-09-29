@@ -46,9 +46,18 @@ export const WalletButton: React.FC = () => {
       <div className="flex items-center gap-2">
         <button
           onClick={() => connectWallet(false)}
-          className="px-3.5 py-1.5 rounded-btn text-xs font-medium text-paper bg-transparent border border-hairline hover:border-cobalt hover:text-white transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-cobalt focus-visible:outline-none"
+          className="px-3.5 py-1.5 rounded-btn text-xs font-semibold text-white bg-cobalt hover:bg-cobalt-hover transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-cobalt focus-visible:outline-none flex items-center gap-1.5 shadow-sm"
         >
-          Connect Bridgekey Wallet
+          <Radio className="w-3 h-3 text-accentEmerald animate-pulse" />
+          <span>Connect Bridgekey</span>
+        </button>
+
+        <button
+          onClick={() => connectWallet(true)}
+          className="px-2.5 py-1.5 rounded-btn text-xs font-mono text-paper-dim hover:text-paper bg-ink-surface border border-hairline hover:border-hairline-bright transition-colors"
+          title="Run with simulated testnet wallet"
+        >
+          Demo
         </button>
       </div>
     );
