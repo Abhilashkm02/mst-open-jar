@@ -16,6 +16,7 @@ interface WalletContextType {
   toggleDemoMode: () => void;
   refreshBalance: () => Promise<void>;
   switchToMstNetwork: () => Promise<boolean>;
+  provider: ethers.BrowserProvider | null;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -472,6 +473,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleDemoMode,
         refreshBalance,
         switchToMstNetwork,
+        provider: providerRef.current,
       }}
     >
       {children}

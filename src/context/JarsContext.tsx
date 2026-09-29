@@ -48,7 +48,7 @@ export const JarsProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [sectorFilter, setSectorFilter] = useState<"ALL" | Sector>("ALL");
   const [selectedJar, setSelectedJar] = useState<IpoJar | null>(null);
 
-  const { wallet, adjustBalance, refreshBalance } = useWallet();
+  const { wallet, adjustBalance, refreshBalance, provider } = useWallet();
   const { showToast } = useToast();
 
   const openInvestDrawer = (jar: IpoJar) => setSelectedJar(jar);
@@ -96,6 +96,45 @@ export const JarsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Safe background check for on-chain state without overwriting user session
   const refreshOnChainState = useCallback(async () => {
+    // 1. Direct on-chain query if BridgeKey is connected
+    if (wallet.isRealWeb3 && provider) {
+      try {
+        const onChainData = await contractService.fetchPoolStatus(provider);
+        if (onChainData) {
+          const sold = onChainData.fractionsSold;
+          const total = onChainData.totalFractions;
+          const percent = total > 0 ? Math.min(100, Math.round((sold / total) * 100)) : 65;
+
+          setJars(prev =>
+            prev.map(j => {
+              if (j.contractAddress.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) return j;
+              let status = j.status;
+              let statusLabel = j.statusLabel;
+              if (onChainData.returnsDistributed) {
+                status = "ALLOTTED";
+                statusLabel = "Bid Successful";
+              } else if (onChainData.lotPurchased || onChainData.isSoldOut || percent >= 100) {
+                status = "LOCKED";
+                statusLabel = "Target Reached";
+              }
+              return {
+                ...j,
+                name: onChainData.companyName || j.name,
+                currentMst: sold > 0 ? sold : j.currentMst,
+                targetMst: total > 0 ? total : j.targetMst,
+                fundedPercent: percent,
+                status,
+                statusLabel,
+              };
+            })
+          );
+        }
+      } catch (e) {
+        console.warn("Direct on-chain status query warning:", e);
+      }
+    }
+
+    // 2. Query /api/jars
     try {
       const res = await fetch("/api/jars");
       if (res.ok) {
@@ -115,7 +154,7 @@ export const JarsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.warn("Backend /api/jars fetch error:", err);
     }
-  }, []);
+  }, [wallet.isRealWeb3, provider]);
 
   useEffect(() => {
     refreshOnChainState();

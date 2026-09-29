@@ -54,9 +54,9 @@ export class ContractService {
         totalReturns,
         poolManager
       ] = await Promise.all([
-        contract.companyName().catch(() => 'AeroPulse Defence Tech SME'),
+        contract.companyName().catch(() => 'TechNova AI'),
         contract.deadline().catch(() => BigInt(Math.floor(Date.now() / 1000) + 86400 * 3)),
-        contract.getPoolStatus().catch(() => [BigInt(68), BigInt(100), ethers.parseEther('1'), false]),
+        contract.getPoolStatus().catch(() => [BigInt(65), BigInt(100), ethers.parseEther('1'), false]),
         contract.lotPurchased().catch(() => false),
         contract.returnsDistributed().catch(() => false),
         contract.totalReturns().catch(() => BigInt(0)),
@@ -64,12 +64,11 @@ export class ContractService {
       ]);
 
       const [sold, total, _price, isSoldOut] = poolStatus;
-      // 1 MST token price for testing purposes as requested
-      const testingFractionPrice = ethers.parseEther('1');
+      const actualFractionPrice = _price && _price > BigInt(0) ? _price : ethers.parseEther('1');
 
       return {
-        companyName: companyName || 'AeroPulse Defence Tech SME',
-        fractionPrice: testingFractionPrice,
+        companyName: companyName || 'TechNova AI',
+        fractionPrice: actualFractionPrice,
         totalFractions: Number(total),
         fractionsSold: Number(sold),
         deadline: Number(deadline),
